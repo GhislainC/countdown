@@ -176,6 +176,7 @@
             pauseButton.textContent = 'Démarrer';
             pauseButton.style.backgroundColor = 'red';
             countdownElement.style.backgroundColor = 'red';
+            document.keepScreenAwake = true;
             
         }
 
@@ -186,9 +187,11 @@
             if (isPaused) {
                 pauseButton.style.backgroundColor = 'red';
                 countdownElement.style.backgroundColor = 'red';
+                document.keepScreenAwake = false;
             } else {
                 pauseButton.style.backgroundColor = '';
                 countdownElement.style.backgroundColor = '';
+                document.keepScreenAwake = true;
             }
 
         }
