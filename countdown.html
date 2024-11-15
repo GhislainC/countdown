@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compte à Rebours Configurable</title>
+    <link href="font.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            color: white;
+            background-color: black;
+        }
+        #countdown {
+            font-size: 25vw;
+            margin: 0;
+            font-family: 'Azeret Mono', monospace; /* Police à chasse fixe */
+        }
+        #current-time {
+            font-size: 5vw;
+            font-family: 'Azeret Mono', monospace; /* Police à chasse fixe */
+        }
+        #config {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(180, 179, 179, 1);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .config-item {
+            margin: 10px 0;
+            font-size: 2vw;
+        }
+        .buttons {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+        button {
+            font-size: 2vw;
+            padding: 10px 20px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="config">
+        <div class="config-item">
+            <label for="duration">Durée (en minutes) :</label>
+            <input type="number" id="duration" min="1" value="5">
+        </div>
+        <div class="config-item">
+            <label for="threshold">Seuil d'avertissement (en secondes) :</label>
+            <input type="number" id="threshold" min="1" value="60">
+        </div>
+        <button id="startButton">Charger</button>
+    </div>
+
+    <div class="buttons">   
+        <button id="sub1min">-1 min</button>
+        <button id="sub5min">-5 min</button>
+        <button id="sub10min">-10 min</button>     
+        <button id="pauseButton">Pause</button>
+        <button id="add1min">+1 min</button>
+        <button id="add5min">+5 min</button>
+        <button id="add10min">+10 min</button>
+        <button id="toggleConfig">Config</button>
+    </div>
+
+    <div id="countdown">--:--</div>
+    <div id="current-time">---/--/-- --:--</div>
+
+    <script>
+        // Variables globales
+        let countdownDuration = 0;
+        let warningThreshold = 0;
+        let remainingTime = 0;
+        let countdownInterval;
+        let isPaused = false;
+
+        // DOM Elements
+        const countdownElement = document.getElementById('countdown');
+        const currentTimeElement = document.getElementById('current-time');
+        const configElement = document.getElementById('config');
+        const durationInput = document.getElementById('duration');
+        const thresholdInput = document.getElementById('threshold');
+        const startButton = document.getElementById('startButton');
+        const pauseButton = document.getElementById('pauseButton');
+        const add1minButton = document.getElementById('add1min');
+        const add5minButton = document.getElementById('add5min');
+        const add10minButton = document.getElementById('add10min');
+        const sub1minButton = document.getElementById('sub1min');
+        const sub5minButton = document.getElementById('sub5min');
+        const sub10minButton = document.getElementById('sub10min');
+        const toggleConfigButton = document.getElementById('toggleConfig');
+
+        // Formatage du temps en mm:ss (compte à rebours)
+        function formatCountdownTime(seconds) {
+            const mins = String(Math.floor(Math.abs(seconds) / 60)).padStart(2, '0');
+            const secs = String(Math.abs(seconds) % 60).padStart(2, '0');
+            return `${seconds < 0 ? '-' : ''}${mins}:${secs}`;
+        }
+
+        // Formatage de l'heure actuelle en hh:mm
+        function formatCurrentTime() {
+            const now = new Date();
+            const year = String(now.getFullYear()).padStart(4, '0');
+            const month = String(now.getMonth()).padStart(2, '0');
+            const day = String(now.getDay()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            return `${year}/${month}/${day} ${hours}:${minutes}`;
+        }
+
+        // Met à jour l'heure actuelle
+        function updateCurrentTime() {
+            currentTimeElement.textContent = formatCurrentTime();
+        }
+
+        // Met à jour le compte à rebours
+        function updateCountdown() {
+            if (!isPaused) {
+                remainingTime--;
+                countdownElement.textContent = formatCountdownTime(remainingTime);
+
+                // Change le background en fonction du temps restant
+                if (remainingTime <= warningThreshold && remainingTime > 0) {
+                    document.body.style.backgroundColor = '#FF8C00'; // Orange moins lumineux
+                    document.body.style.color = 'black'; // Texte noir pour contraste
+                } else if (remainingTime <= 0) {
+                    document.body.style.backgroundColor = 'red';
+                    document.body.style.color = 'white'; // Texte blanc sur fond rouge
+                } else {
+                    document.body.style.backgroundColor = 'black';
+                    document.body.style.color = 'white';
+                }
+            } else {
+                if ((new Date()).getSeconds()%2 == 0) {
+                    pauseButton.style.backgroundColor = 'red';
+                } else {
+                    pauseButton.style.backgroundColor = '';
+                }
+            }
+        }
+
+        // Démarre le compte à rebours
+        function startCountdown() {
+            countdownDuration = parseInt(durationInput.value) * 60;
+            warningThreshold = parseInt(thresholdInput.value);
+
+            remainingTime = countdownDuration;
+            countdownElement.textContent = formatCountdownTime(remainingTime);
+            document.body.style.backgroundColor = 'black';
+
+            clearInterval(countdownInterval);
+            countdownInterval = setInterval(updateCountdown, 1000);
+
+            configElement.classList.add('hidden');
+            isPaused = true;
+            pauseButton.textContent = 'Démarrer';
+            pauseButton.style.backgroundColor = 'red';
+            countdownElement.style.backgroundColor = 'red';
+            
+        }
+
+        // Gérer le bouton Pause/Reprendre
+        function togglePause() {
+            isPaused = !isPaused;
+            pauseButton.textContent = isPaused ? 'Reprendre' : 'Pause';
+            if (isPaused) {
+                pauseButton.style.backgroundColor = 'red';
+                countdownElement.style.backgroundColor = 'red';
+            } else {
+                pauseButton.style.backgroundColor = '';
+                countdownElement.style.backgroundColor = '';
+            }
+
+        }
+
+        // Ajouter du temps au compte à rebours
+        function addTime(seconds) {
+            remainingTime += seconds;
+            countdownElement.textContent = formatCountdownTime(remainingTime);
+        }
+
+        // Retirer du temps au compte à rebours
+        function subtractTime(seconds) {
+            remainingTime -= seconds;
+            countdownElement.textContent = formatCountdownTime(remainingTime);
+        }
+
+        // Afficher/Masquer la configuration
+        function toggleConfig() {
+            configElement.classList.toggle('hidden');
+        }
+
+        // Mise à jour de l'heure actuelle toutes les secondes
+        setInterval(updateCurrentTime, 1000);
+
+        // Attacher les événements
+        startButton.addEventListener('click', startCountdown);
+        pauseButton.addEventListener('click', togglePause);
+        add1minButton.addEventListener('click', () => addTime(60));
+        add5minButton.addEventListener('click', () => addTime(300));
+        add10minButton.addEventListener('click', () => addTime(600));
+        sub1minButton.addEventListener('click', () => subtractTime(60));
+        sub5minButton.addEventListener('click', () => subtractTime(300));
+        sub10minButton.addEventListener('click', () => subtractTime(600));
+        toggleConfigButton.addEventListener('click', toggleConfig);
+    </script>
+</body>
+</html>
