@@ -110,6 +110,31 @@
         const sub10minButton = document.getElementById('sub10min');
         const toggleConfigButton = document.getElementById('toggleConfig');
 
+        let wakeLock = null;  // Variable pour stocker l'état du Wake Lock
+        async function setScreenAwake(shouldKeepAwake) {
+            if (shouldKeepAwake) {
+                // Si l'on souhaite garder l'écran éveillé
+                if (!wakeLock) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Écran verrouillé pour rester allumé.');
+                } catch (err) {
+                    console.error('Erreur lors de l\'activation du Wake Lock:', err);
+                }
+                }
+            } else {
+                // Si l'on souhaite permettre à l'écran de se verrouiller
+                if (wakeLock) {
+                await wakeLock.release();
+                wakeLock = null;
+                console.log('Écran peut maintenant se verrouiller.');
+                }
+            }
+        }
+        window.addEventListener('beforeunload', () => {
+            setScreenAwake(false);            
+          });
+
         // Formatage du temps en mm:ss (compte à rebours)
         function formatCountdownTime(seconds) {
             const mins = String(Math.floor(Math.abs(seconds) / 60)).padStart(2, '0');
@@ -177,7 +202,7 @@
             pauseButton.style.backgroundColor = 'red';
             countdownElement.style.backgroundColor = 'red';
             document.body.style.color = 'white';
-            document.keepScreenAwake = true;
+            setScreenAwake(true);
             
         }
 
@@ -188,11 +213,11 @@
             if (isPaused) {
                 pauseButton.style.backgroundColor = 'red';
                 countdownElement.style.backgroundColor = 'red';
-                document.keepScreenAwake = false;
+                setScreenAwake(false);
             } else {
                 pauseButton.style.backgroundColor = '';
                 countdownElement.style.backgroundColor = '';
-                document.keepScreenAwake = true;
+                setScreenAwake(true);
             }
 
         }
