@@ -23,11 +23,28 @@
             margin: 0;
             font-family: 'Azeret Mono', monospace; /* Police à chasse fixe */
         }
+        #message {
+        font-size: clamp(2rem, 20vw, 10rem);
+        margin: 0;
+        font-family: 'Azeret Mono', monospace;
+        word-wrap: normal;
+        text-align: center;
+        }
         #current-time {
             font-size: 5vw;
             font-family: 'Azeret Mono', monospace; /* Police à chasse fixe */
         }
         #config {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(180, 179, 179, 1);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        #message-editor {
             position: absolute;
             top: 10px;
             left: 50%;
@@ -60,7 +77,7 @@
     </style>
 </head>
 <body>
-    <div id="config">
+    <div id="config" class="hidden">
         <div class="config-item">
             <label for="duration">Durée (en minutes) :</label>
             <input type="number" id="duration" min="1" value="45">
@@ -70,6 +87,22 @@
             <input type="number" id="threshold" min="1" value="120">
         </div>
         <button id="startButton">Charger</button>
+    </div>
+
+    <div id="message-editor" class="hidden">
+        <div class="config-item">
+            <label for="message-duration">Durée (en s) :</label>
+            <input type="number" id="message-duration" min="1" value="10">
+        </div>
+        <div class="config-item">
+            <label for="message-content">Message</label>
+            <input id="message-content">
+        </div>
+        <div class="config-item">
+            <label for="message-color">Color</label>
+            <input id="message-color" value="amber">
+        </div>
+        <button id="send_message">Envoyer</button>
     </div>
 
     <div id="main_controls" class="buttons">   
@@ -82,9 +115,11 @@
         <button id="add10min">+10 min</button>
         <button id="timeOnly">Heure</button>
         <button id="toggleConfig">Config</button>
+        <button id="toggleMessage">Message</button>
     </div>
 
     <div id="countdown">--:--</div>
+    <div id="message" class="hidden"></div>
     <div id="current-time">-- -------- -- --:--</div>
 
     <script>
@@ -99,15 +134,19 @@
             warningThreshold: 0,
             isPaused: false,
             isStarted: false,
-            timeOnly: false
+            timeOnly: false            
         }
+
+        let messageDisplayed = false
 
         let countdownInterval;        
 
         // DOM Elements
         const countdownElement = document.getElementById('countdown');
+        const messageElement = document.getElementById('message');
         const currentTimeElement = document.getElementById('current-time');
         const configElement = document.getElementById('config');
+        const messageEditorElement = document.getElementById('message-editor');
         const mainControlsElements = document.getElementById('main_controls');
         const durationInput = document.getElementById('duration');
         const thresholdInput = document.getElementById('threshold');
@@ -121,6 +160,11 @@
         const sub10minButton = document.getElementById('sub10min');
         const timeOnlyButton = document.getElementById('timeOnly');
         const toggleConfigButton = document.getElementById('toggleConfig');
+        const toggleMessageButton = document.getElementById('toggleMessage');
+        const sendMessageButton = document.getElementById('send_message');
+        const messageContentInput = document.getElementById('message-content');
+        const messageDurationInput = document.getElementById('message-duration');
+        const messageColorInput = document.getElementById('message-color');
 
         // Session Identifier
         var session_id = null;
@@ -181,12 +225,15 @@
             if (data.config) {
                 config = data.config;                
             }
-            if (data.cmd) {                
+            if (data.cmd) {  
+                if (i_am_master) {
+                    mainControlsElements.classList.add('hidden');
+                }              
                 switch(data.cmd.name) {
                     case 'start': 
-                        configElement.classList.add('hidden');
+                        configElement.classList.add('hidden');                        
                         initStart();
-                        startCountdown();                        
+                        startCountdown();
                     break;
                     case 'hello':                     
                         if (i_am_master) {
@@ -232,6 +279,13 @@
                             subtractTime(data.cmd.data)
                         }
                     break;
+                    case 'message':
+                        display_message(
+                            data.cmd.data.message, 
+                            data.cmd.data.timeout,
+                            data.cmd.data.bgcolor
+                            )
+                    break;
                 }
             }
         };
@@ -257,6 +311,37 @@
             }, 500);
         }
         electMaster();
+
+        function display_message(message, timeout, bgcolor) {
+            messageDisplayed = true
+            messageElement.textContent = message
+            
+            if (bgcolor == "amber") {
+                document.body.style.backgroundColor = '#FF8C00'; // Orange moins lumineux
+                document.body.style.color = 'black'; // Texte noir pour contraste
+            } else if (bgcolor == "red") {
+                document.body.style.backgroundColor = 'red';
+                document.body.style.color = 'white'; // Texte blanc sur fond rouge
+            } else if (bgcolor == "green") {
+                document.body.style.backgroundColor = '#00ff00';
+                document.body.style.color = 'black'; // Texte blanc sur fond rouge
+            } else {
+                document.body.style.backgroundColor = 'black';
+                document.body.style.color = 'white';
+            }
+        
+            countdownElement.classList.add('hidden');
+            currentTimeElement.classList.add('hidden');
+            messageElement.classList.remove('hidden');
+
+            setTimeout(() => {
+                messageDisplayed = false
+                currentTimeElement.classList.remove('hidden');
+                countdownElement.classList.remove('hidden');
+                messageElement.classList.add('hidden');                
+                updateCountdown()
+            }, timeout);
+        }
 
         function sendContext() {
             if (i_am_master) {
@@ -317,7 +402,9 @@
         // Met à jour le compte à rebours
         function updateCountdown() {
             if (context.timeOnly) {
-                countdownElement.textContent = formatCurrentTime(date=false);
+                if (!messageDisplayed) {
+                    countdownElement.textContent = formatCurrentTime(date=false);
+                }
             } else {
                 if (!context.isPaused) {
                     if (i_am_master) {
@@ -332,19 +419,23 @@
                         pauseButton.style.backgroundColor = '';
                     }
                 }
-                countdownElement.textContent = formatCountdownTime(context.remainingTime);
+                if (!messageDisplayed) {
+                    countdownElement.textContent = formatCountdownTime(context.remainingTime);
+                }
             }            
             updatePauseLabel();
-            // Change le background en fonction du temps restant
-            if (!context.timeOnly && context.remainingTime <= context.warningThreshold && context.remainingTime > 0) {
-                document.body.style.backgroundColor = '#FF8C00'; // Orange moins lumineux
-                document.body.style.color = 'black'; // Texte noir pour contraste
-            } else if (!context.timeOnly && context.remainingTime <= 0) {
-                document.body.style.backgroundColor = 'red';
-                document.body.style.color = 'white'; // Texte blanc sur fond rouge
-            } else {
-                document.body.style.backgroundColor = 'black';
-                document.body.style.color = 'white';
+            if (!messageDisplayed) {   
+                // Change le background en fonction du temps restant
+                if (!context.timeOnly && context.remainingTime <= context.warningThreshold && context.remainingTime > 0) {
+                    document.body.style.backgroundColor = '#FF8C00'; // Orange moins lumineux
+                    document.body.style.color = 'black'; // Texte noir pour contraste
+                } else if (!context.timeOnly && context.remainingTime <= 0) {
+                    document.body.style.backgroundColor = 'red';
+                    document.body.style.color = 'white'; // Texte blanc sur fond rouge
+                } else {
+                    document.body.style.backgroundColor = 'black';
+                    document.body.style.color = 'white';
+                }
             }
         }
 
@@ -356,8 +447,7 @@
             clearInterval(countdownInterval);
             countdownInterval = setInterval(updateCountdown, 1000);
 
-            if (i_am_master) {
-                mainControlsElements.classList.add('hidden');
+            if (i_am_master) {                
                 configElement.classList.add('hidden');
             }
             
@@ -373,6 +463,11 @@
             config.warningThreshold = parseInt(thresholdInput.value);
 
             configElement.classList.add('hidden');
+
+            context.timeOnly = false;
+            sendCmd('timeOnly', context.timeOnly);
+            updateTimeOnly()
+            updateTimeOnlyLabel()            
 
             sendConfig();
             initStart();
@@ -444,6 +539,10 @@
             configElement.classList.toggle('hidden');
         }
 
+        function toggleMessage() {
+            messageEditorElement.classList.toggle('hidden');
+        }
+
         // Gérer le bouton Pause/Reprendre
         function toggleTimeOnly() {
             context.timeOnly = !context.timeOnly;
@@ -471,6 +570,19 @@
             }
         }
 
+        function display_message_action() {
+            duration = parseInt(messageDurationInput.value) * 1000;
+            content = messageContentInput.value;
+            color = messageColorInput.value;
+
+            display_message(content, duration, color);
+            sendCmd('message', {
+                timeout: duration,
+                message: content,
+                bgcolor: color
+            })
+        }
+
         // Mise à jour de l'heure actuelle toutes les secondes
         setInterval(updateCurrentTime, 1000);
 
@@ -484,7 +596,10 @@
         sub5minButton.addEventListener('click', () => subtractTime(300));
         sub10minButton.addEventListener('click', () => subtractTime(600));
         toggleConfigButton.addEventListener('click', toggleConfig);
+        toggleMessageButton.addEventListener('click', toggleMessage);
         timeOnlyButton.addEventListener('click', toggleTimeOnly);
+
+        sendMessageButton.addEventListener('click', display_message_action);
 
     </script>
 </body>
