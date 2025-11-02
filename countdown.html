@@ -72,7 +72,7 @@
         <button id="startButton">Charger</button>
     </div>
 
-    <div class="buttons">   
+    <div id="main_controls" class="buttons">   
         <button id="sub10min">-10 min</button> 
         <button id="sub5min">-5 min</button>
         <button id="sub1min">-1 min</button>
@@ -80,24 +80,35 @@
         <button id="add1min">+1 min</button>
         <button id="add5min">+5 min</button>
         <button id="add10min">+10 min</button>
+        <button id="timeOnly">Heure</button>
         <button id="toggleConfig">Config</button>
     </div>
 
     <div id="countdown">--:--</div>
-    <div id="current-time">---/--/-- --:--</div>
+    <div id="current-time">-- -------- -- --:--</div>
 
     <script>
         // Variables globales
-        let countdownDuration = 0;
-        let warningThreshold = 0;
-        let remainingTime = 0;
-        let countdownInterval;
-        let isPaused = false;
+        let config = {
+            countdownDuration: 0,
+            warningThreshold: 0
+        }
+        
+        let context = {
+            remainingTime: 0,
+            warningThreshold: 0,
+            isPaused: false,
+            isStarted: false,
+            timeOnly: false
+        }
+
+        let countdownInterval;        
 
         // DOM Elements
         const countdownElement = document.getElementById('countdown');
         const currentTimeElement = document.getElementById('current-time');
         const configElement = document.getElementById('config');
+        const mainControlsElements = document.getElementById('main_controls');
         const durationInput = document.getElementById('duration');
         const thresholdInput = document.getElementById('threshold');
         const startButton = document.getElementById('startButton');
@@ -108,7 +119,25 @@
         const sub1minButton = document.getElementById('sub1min');
         const sub5minButton = document.getElementById('sub5min');
         const sub10minButton = document.getElementById('sub10min');
+        const timeOnlyButton = document.getElementById('timeOnly');
         const toggleConfigButton = document.getElementById('toggleConfig');
+
+        // Session Identifier
+        var session_id = null;
+        var i_am_master = false;
+        var masterExists = false;
+        const own_id = crypto.randomUUID();
+        const fragments = new URLSearchParams(
+            window.location.hash.substring(1) // any_hash_key=any_value
+        );
+        session_id = fragments.get('session') || ""
+        if (session_id != "") {
+
+        } else {
+            session_id = crypto.randomUUID();
+        }
+        const bc = new BroadcastChannel(`countdown.${session_id}`);        
+        console.log(`session_id=${session_id}`);
 
         let wakeLock = null;  // Variable pour stocker l'état du Wake Lock
         async function setScreenAwake(shouldKeepAwake) {
@@ -132,8 +161,122 @@
             }
         }
         window.addEventListener('beforeunload', () => {
-            setScreenAwake(false);            
+            setScreenAwake(false);
+            sendCmd('master-dead', {id: own_id})
+            bc.close();
           });
+
+        bc.onmessage = (event) => {
+            data = event.data;
+            console.log(`Broadcast from ${data.sender}: ${JSON.stringify(data)}`)
+            if (i_am_master) {
+
+            } else {
+                if (data.context) {
+                    context = data.context;
+                    updateCountdown();
+                    updatePause();
+                }
+            }
+            if (data.config) {
+                config = data.config;                
+            }
+            if (data.cmd) {                
+                switch(data.cmd.name) {
+                    case 'start': 
+                        configElement.classList.add('hidden');
+                        initStart();
+                        startCountdown();                        
+                    break;
+                    case 'hello':                     
+                        if (i_am_master) {
+                            sendCmd('master-exists', {id: own_id});
+                        }
+                    break;
+                    case 'master-exists': 
+                        if (!i_am_master) {
+                            console.log("Another master exists:", data.cmd.data.id);
+                            masterExists = true;
+                        }
+                        document.title = `CD m=${i_am_master} s=${session_id}`
+                    break;
+                    /*case 'master-dead':
+                        if (!i_am_master) {
+                            console.log("Master died, re-electing...");
+                            electMaster();
+                        }
+                    break;*/
+                    case 'pause':
+                        context.isPaused = data.cmd.data
+                        updatePause();
+                        sendContext();
+                    break;
+                    case 'timeOnly':
+                        context.timeOnly = data.cmd.data
+                        initStart();
+                        startCountdown();   
+                        updateTimeOnly();
+                        context.isPaused = !context.timeOnly;
+                        updatePause();
+                        sendContext();
+                        updateCountdown();
+                        updateCurrentTime();
+                    break;
+                    case 'addTime':
+                        if (i_am_master) {
+                            addTime(data.cmd.data)
+                        }
+                    break;
+                    case 'subtractTime':
+                        if (i_am_master) {
+                            subtractTime(data.cmd.data)
+                        }
+                    break;
+                }
+            }
+        };
+
+        function announcePresence() {
+            sendCmd("hello", {id: own_id });
+        }
+
+        function electMaster() {
+            masterExists = false;
+            announcePresence();
+
+            // Attendre un peu pour voir si un master répond
+            setTimeout(() => {
+                if (!masterExists) {
+                    i_am_master = true;
+                    console.log("🟢 I am the new master:", own_id);
+                    sendCmd("new-master", {id: own_id });
+                } else {
+                    console.log("🔵 I am a slave:", own_id);
+                }
+                document.title = `CD m=${i_am_master} s=${session_id}`
+            }, 500);
+        }
+        electMaster();
+
+        function sendContext() {
+            if (i_am_master) {
+                bc.postMessage({sender: own_id, context: context})
+            }
+        }
+
+        function sendConfig() {
+            bc.postMessage({sender: own_id, config: config})
+        }
+
+        function sendCmd(cmd_name, data) {
+            bc.postMessage({
+                sender: own_id, 
+                cmd: {
+                    name: cmd_name,
+                    data: data
+                }
+            })
+        }
 
         // Formatage du temps en mm:ss (compte à rebours)
         function formatCountdownTime(seconds) {
@@ -142,75 +285,128 @@
             return `${seconds < 0 ? '-' : ''}${mins}:${secs}`;
         }
 
+        function capitalize(s)
+        {
+            return String(s[0]).toUpperCase() + String(s).slice(1);
+        }
+
         // Formatage de l'heure actuelle en hh:mm
-        function formatCurrentTime() {
+        function formatCurrentTime(date=true, time=true) {
             const now = new Date();
             const year = String(now.getFullYear()).padStart(4, '0');
-            const month = String(now.getMonth() + 1).padStart(2, '0');
+            //const month = String(now.getMonth() + 1).padStart(2, '0');
+            const month = capitalize(now.toLocaleString('default', { month: 'long' }));
             const day = String(now.getDate()).padStart(2, '0');
             const hours = String(now.getHours()).padStart(2, '0');
             const minutes = String(now.getMinutes()).padStart(2, '0');
-            return `${year}/${month}/${day} ${hours}:${minutes}`;
+            var ret = []
+            if (date) {
+                ret.push(`${day} ${month} ${year}`)
+            }
+            if (time) {
+                ret.push(`${hours}:${minutes}`)
+            }
+            return ret.join(' ')
         }
 
         // Met à jour l'heure actuelle
         function updateCurrentTime() {
-            currentTimeElement.textContent = formatCurrentTime();
+            currentTimeElement.textContent = formatCurrentTime(date=true, time=!context.timeOnly);
         }
 
         // Met à jour le compte à rebours
         function updateCountdown() {
-            if (!isPaused) {
-                remainingTime--;
-                countdownElement.textContent = formatCountdownTime(remainingTime);
-
-                // Change le background en fonction du temps restant
-                if (remainingTime <= warningThreshold && remainingTime > 0) {
-                    document.body.style.backgroundColor = '#FF8C00'; // Orange moins lumineux
-                    document.body.style.color = 'black'; // Texte noir pour contraste
-                } else if (remainingTime <= 0) {
-                    document.body.style.backgroundColor = 'red';
-                    document.body.style.color = 'white'; // Texte blanc sur fond rouge
-                } else {
-                    document.body.style.backgroundColor = 'black';
-                    document.body.style.color = 'white';
-                }
+            if (context.timeOnly) {
+                countdownElement.textContent = formatCurrentTime(date=false);
             } else {
-                if ((new Date()).getSeconds()%2 == 0) {
-                    pauseButton.style.backgroundColor = 'red';
+                if (!context.isPaused) {
+                    if (i_am_master) {
+                        context.isStarted = true;
+                        context.remainingTime--;
+                        sendContext();                    
+                    }                
                 } else {
-                    pauseButton.style.backgroundColor = '';
+                    if ((new Date()).getSeconds()%2 == 0) {
+                        pauseButton.style.backgroundColor = 'red';
+                    } else {
+                        pauseButton.style.backgroundColor = '';
+                    }
                 }
+                countdownElement.textContent = formatCountdownTime(context.remainingTime);
+            }            
+            updatePauseLabel();
+            // Change le background en fonction du temps restant
+            if (!context.timeOnly && context.remainingTime <= context.warningThreshold && context.remainingTime > 0) {
+                document.body.style.backgroundColor = '#FF8C00'; // Orange moins lumineux
+                document.body.style.color = 'black'; // Texte noir pour contraste
+            } else if (!context.timeOnly && context.remainingTime <= 0) {
+                document.body.style.backgroundColor = 'red';
+                document.body.style.color = 'white'; // Texte blanc sur fond rouge
+            } else {
+                document.body.style.backgroundColor = 'black';
+                document.body.style.color = 'white';
             }
         }
 
         // Démarre le compte à rebours
         function startCountdown() {
-            countdownDuration = parseInt(durationInput.value) * 60;
-            warningThreshold = parseInt(thresholdInput.value);
-
-            remainingTime = countdownDuration;
-            countdownElement.textContent = formatCountdownTime(remainingTime);
+            countdownElement.textContent = formatCountdownTime(context.remainingTime);
             document.body.style.backgroundColor = 'black';
 
             clearInterval(countdownInterval);
             countdownInterval = setInterval(updateCountdown, 1000);
 
-            configElement.classList.add('hidden');
-            isPaused = true;
-            pauseButton.textContent = 'Démarrer';
-            pauseButton.style.backgroundColor = 'red';
+            if (i_am_master) {
+                mainControlsElements.classList.add('hidden');
+                configElement.classList.add('hidden');
+            }
+            
             countdownElement.style.backgroundColor = 'red';
             document.body.style.color = 'white';
             setScreenAwake(true);
-            
+            updatePause();
+            sendContext();
         }
 
+        function configureStart() {
+            config.countdownDuration = parseInt(durationInput.value) * 60;
+            config.warningThreshold = parseInt(thresholdInput.value);
+
+            configElement.classList.add('hidden');
+
+            sendConfig();
+            initStart();
+            startCountdown();
+            sendCmd('start');
+        }
+
+        function initStart() {
+            if (i_am_master) {
+                context.isStarted = false;
+                context.remainingTime = config.countdownDuration;
+                context.warningThreshold = config.warningThreshold;
+                context.isPaused = true;
+            }
+        }
         // Gérer le bouton Pause/Reprendre
         function togglePause() {
-            isPaused = !isPaused;
-            pauseButton.textContent = isPaused ? 'Reprendre' : 'Pause';
-            if (isPaused) {
+            context.isPaused = !context.isPaused;
+            updatePause();
+            sendCmd('pause', context.isPaused);
+
+        }
+
+        function updatePauseLabel() {
+            if (context.isStarted) {
+                pauseButton.textContent = context.isPaused ? 'Reprendre' : 'Pause';
+            } else {
+                pauseButton.textContent = 'Démarrer';
+            }
+        }
+
+        function updatePause() {
+            updatePauseLabel();
+            if (context.isPaused) {
                 pauseButton.style.backgroundColor = 'red';
                 countdownElement.style.backgroundColor = 'red';
                 setScreenAwake(false);
@@ -219,19 +415,28 @@
                 countdownElement.style.backgroundColor = '';
                 setScreenAwake(true);
             }
-
         }
 
         // Ajouter du temps au compte à rebours
         function addTime(seconds) {
-            remainingTime += seconds;
-            countdownElement.textContent = formatCountdownTime(remainingTime);
+            if (i_am_master) {
+                context.remainingTime += seconds;
+                countdownElement.textContent = formatCountdownTime(context.remainingTime);
+                sendContext();
+            } else {
+                sendCmd('addTime', seconds)
+            }
         }
 
         // Retirer du temps au compte à rebours
         function subtractTime(seconds) {
-            remainingTime -= seconds;
-            countdownElement.textContent = formatCountdownTime(remainingTime);
+            if (i_am_master) {
+                context.remainingTime -= seconds;
+                countdownElement.textContent = formatCountdownTime(context.remainingTime);
+                sendContext();
+            } else {
+                sendCmd('subtractTime', seconds)
+            }
         }
 
         // Afficher/Masquer la configuration
@@ -239,11 +444,38 @@
             configElement.classList.toggle('hidden');
         }
 
+        // Gérer le bouton Pause/Reprendre
+        function toggleTimeOnly() {
+            context.timeOnly = !context.timeOnly;
+            initStart();
+            startCountdown();   
+            updateTimeOnly();
+            sendCmd('timeOnly', context.timeOnly);
+            updateCountdown();
+            updateCurrentTime();
+
+        }
+
+        function updateTimeOnlyLabel() {
+            timeOnlyButton.textContent = context.timeOnly ? 'Chrono' : 'Heure';
+        }
+
+        function updateTimeOnly() {
+            updateTimeOnlyLabel();
+            if (context.timeOnly) {
+                timeOnlyButton.style.backgroundColor = 'red';
+                setScreenAwake(true);
+            } else {
+                timeOnlyButton.style.backgroundColor = '';
+                setScreenAwake(!context.isPaused);
+            }
+        }
+
         // Mise à jour de l'heure actuelle toutes les secondes
         setInterval(updateCurrentTime, 1000);
 
         // Attacher les événements
-        startButton.addEventListener('click', startCountdown);
+        startButton.addEventListener('click', configureStart);
         pauseButton.addEventListener('click', togglePause);
         add1minButton.addEventListener('click', () => addTime(60));
         add5minButton.addEventListener('click', () => addTime(300));
@@ -252,6 +484,8 @@
         sub5minButton.addEventListener('click', () => subtractTime(300));
         sub10minButton.addEventListener('click', () => subtractTime(600));
         toggleConfigButton.addEventListener('click', toggleConfig);
+        timeOnlyButton.addEventListener('click', toggleTimeOnly);
+
     </script>
 </body>
 </html>
