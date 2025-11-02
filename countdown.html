@@ -537,10 +537,16 @@
         // Afficher/Masquer la configuration
         function toggleConfig() {
             configElement.classList.toggle('hidden');
+            if (!configElement.classList.contains('hidden')) {
+                messageEditorElement.classList.add('hidden');
+            }
         }
 
         function toggleMessage() {
             messageEditorElement.classList.toggle('hidden');
+            if (!messageEditorElement.classList.contains('hidden')) {
+                configElement.classList.add('hidden');
+            }
         }
 
         // Gérer le bouton Pause/Reprendre
