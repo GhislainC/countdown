@@ -1,0 +1,107 @@
+:root {
+    --bg-color: #000000;
+    --text-color: #ffffff;
+    --panel-bg: rgba(180, 179, 179, 1);
+    --warning-bg: #FF8C00;
+    --warning-color: #000000;
+    --alert-bg: #ff0000;
+    --alert-color: #ffffff;
+    --font-mono: 'Azeret Mono', monospace;
+    --font-sans: Arial, sans-serif;
+}
+
+body {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: var(--font-sans);
+    text-align: center;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    box-sizing: border-box;
+}
+
+*, *::before, *::after {
+    box-sizing: inherit;
+}
+
+.display-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+#countdown {
+    font-size: 25vw;
+    margin: 0;
+    font-family: var(--font-mono);
+}
+
+#message {
+    font-size: clamp(2rem, 20vw, 10rem);
+    margin: 0;
+    font-family: var(--font-mono);
+    word-wrap: normal;
+    text-align: center;
+}
+
+#current-time {
+    font-size: 5vw;
+    font-family: var(--font-mono);
+}
+
+.panel {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--panel-bg);
+    color: #000000;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+}
+
+.config-item {
+    margin: 10px 0;
+    font-size: 2vw;
+}
+
+.config-item input {
+    font-size: inherit;
+    padding: 2px 6px;
+}
+
+.buttons {
+    margin-top: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+}
+
+button {
+    font-size: 2vw;
+    padding: 10px 20px;
+    cursor: pointer;
+    margin: 5px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background-color: #e0e0e0;
+    color: #000000;
+    transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+button:hover {
+    opacity: 0.85;
+}
+
+.hidden {
+    display: none !important;
+}
