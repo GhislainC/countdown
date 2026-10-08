@@ -2,15 +2,15 @@
 
 // Configuration default values
 let config = {
-    countdownDuration: 0,
-    warningThreshold: 0
+    countdownDuration: 2700, // Default 45 mins in seconds
+    warningThreshold: 120    // Default 2 mins in seconds
 };
 
 // Application state/context
 let context = {
-    remainingTime: 0,
-    warningThreshold: 0,
-    isPaused: false,
+    remainingTime: 2700,
+    warningThreshold: 120,
+    isPaused: true,
     isStarted: false,
     timeOnly: false
 };
@@ -24,7 +24,12 @@ const messageElement = document.getElementById('message');
 const currentTimeElement = document.getElementById('current-time');
 const configElement = document.getElementById('config');
 const messageEditorElement = document.getElementById('message-editor');
+const modalOverlay = document.getElementById('modal-overlay');
+const closeConfigButton = document.getElementById('closeConfig');
+const closeMessageButton = document.getElementById('closeMessage');
 const mainControlsElements = document.getElementById('main_controls');
+const progressBar = document.getElementById('progress-bar');
+
 const durationInput = document.getElementById('duration');
 const thresholdInput = document.getElementById('threshold');
 const startButton = document.getElementById('startButton');
@@ -104,13 +109,9 @@ bc.onmessage = (event) => {
     }
 
     if (data.cmd) {
-        if (i_am_master) {
-            mainControlsElements.classList.add('hidden');
-        }
-
         switch (data.cmd.name) {
             case 'start':
-                configElement.classList.add('hidden');
+                closeModals();
                 initStart();
                 startCountdown();
                 break;
@@ -173,7 +174,6 @@ function electMaster() {
     masterExists = false;
     announcePresence();
 
-    // Attendre un peu pour voir si un master répond
     setTimeout(() => {
         if (!masterExists) {
             i_am_master = true;
@@ -188,22 +188,67 @@ function electMaster() {
 
 electMaster();
 
+// Auto-hide Control Bar Logic
+let hideControlsTimeout = null;
+
+function resetControlsTimeout() {
+    if (!mainControlsElements) return;
+
+    mainControlsElements.classList.remove('autohide');
+    clearTimeout(hideControlsTimeout);
+
+    // If modal is open, don't auto-hide
+    const isModalOpen = !configElement.classList.contains('hidden') || !messageEditorElement.classList.contains('hidden');
+    if (isModalOpen) return;
+
+    hideControlsTimeout = setTimeout(() => {
+        mainControlsElements.classList.add('autohide');
+    }, 3000);
+}
+
+['mousemove', 'mousedown', 'keydown', 'touchstart', 'pointermove'].forEach(eventType => {
+    window.addEventListener(eventType, resetControlsTimeout, { passive: true });
+});
+resetControlsTimeout();
+
+// Modal Overlay & Close Management
+function closeModals() {
+    configElement.classList.add('hidden');
+    messageEditorElement.classList.add('hidden');
+    modalOverlay.classList.add('hidden');
+    resetControlsTimeout();
+}
+
+function openModal(modalEl) {
+    closeModals();
+    modalEl.classList.remove('hidden');
+    modalOverlay.classList.remove('hidden');
+    resetControlsTimeout();
+}
+
+modalOverlay.addEventListener('click', closeModals);
+if (closeConfigButton) closeConfigButton.addEventListener('click', closeModals);
+if (closeMessageButton) closeMessageButton.addEventListener('click', closeModals);
+
+// Message Display Management
 function display_message(message, timeout, bgcolor) {
     messageDisplayed = true;
     messageElement.textContent = message;
 
+    document.body.classList.remove('state-warning', 'state-alert');
+
     if (bgcolor === 'amber') {
-        document.body.style.backgroundColor = '#FF8C00'; // Orange moins lumineux
-        document.body.style.color = 'black'; // Texte noir pour contraste
+        document.body.style.backgroundColor = '#d97706';
+        document.body.style.color = '#ffffff';
     } else if (bgcolor === 'red') {
-        document.body.style.backgroundColor = 'red';
-        document.body.style.color = 'white'; // Texte blanc sur fond rouge
+        document.body.style.backgroundColor = '#dc2626';
+        document.body.style.color = '#ffffff';
     } else if (bgcolor === 'green') {
-        document.body.style.backgroundColor = '#00ff00';
-        document.body.style.color = 'black';
+        document.body.style.backgroundColor = '#16a34a';
+        document.body.style.color = '#ffffff';
     } else {
-        document.body.style.backgroundColor = 'black';
-        document.body.style.color = 'white';
+        document.body.style.backgroundColor = '#0b0f19';
+        document.body.style.color = '#ffffff';
     }
 
     countdownElement.classList.add('hidden');
@@ -212,6 +257,8 @@ function display_message(message, timeout, bgcolor) {
 
     setTimeout(() => {
         messageDisplayed = false;
+        document.body.style.backgroundColor = '';
+        document.body.style.color = '';
         currentTimeElement.classList.remove('hidden');
         countdownElement.classList.remove('hidden');
         messageElement.classList.add('hidden');
@@ -239,7 +286,7 @@ function sendCmd(cmd_name, data) {
     });
 }
 
-// Formatage du temps en mm:ss (compte à rebours)
+// Time Formatting
 function formatCountdownTime(seconds) {
     const mins = String(Math.floor(Math.abs(seconds) / 60)).padStart(2, '0');
     const secs = String(Math.abs(seconds) % 60).padStart(2, '0');
@@ -251,7 +298,6 @@ function capitalize(s) {
     return String(s[0]).toUpperCase() + String(s).slice(1);
 }
 
-// Formatage de l'heure actuelle en hh:mm
 function formatCurrentTime(showDate = true, showTime = true) {
     const now = new Date();
     const year = String(now.getFullYear()).padStart(4, '0');
@@ -269,12 +315,36 @@ function formatCurrentTime(showDate = true, showTime = true) {
     return ret.join(' ');
 }
 
-// Met à jour l'heure actuelle
 function updateCurrentTime() {
     currentTimeElement.textContent = formatCurrentTime(true, !context.timeOnly);
 }
 
-// Met à jour le compte à rebours
+// Progress Bar Management
+function updateProgressBar() {
+    if (!progressBar) return;
+
+    if (context.timeOnly) {
+        progressBar.style.width = '100%';
+        progressBar.style.backgroundColor = 'var(--primary-color)';
+        return;
+    }
+
+    const totalDuration = config.countdownDuration || 1;
+    let percentage = (context.remainingTime / totalDuration) * 100;
+    percentage = Math.max(0, Math.min(100, percentage));
+
+    progressBar.style.width = `${percentage}%`;
+
+    if (context.remainingTime <= 0) {
+        progressBar.style.backgroundColor = 'var(--alert-bg)';
+    } else if (context.remainingTime <= context.warningThreshold) {
+        progressBar.style.backgroundColor = 'var(--warning-bg)';
+    } else {
+        progressBar.style.backgroundColor = 'var(--primary-color)';
+    }
+}
+
+// Countdown Loop & Render
 function updateCountdown() {
     if (context.timeOnly) {
         if (!messageDisplayed) {
@@ -287,47 +357,33 @@ function updateCountdown() {
                 context.remainingTime--;
                 sendContext();
             }
-        } else {
-            if (new Date().getSeconds() % 2 === 0) {
-                pauseButton.style.backgroundColor = 'red';
-            } else {
-                pauseButton.style.backgroundColor = '';
-            }
         }
         if (!messageDisplayed) {
             countdownElement.textContent = formatCountdownTime(context.remainingTime);
         }
     }
+
     updatePauseLabel();
+    updateProgressBar();
+
     if (!messageDisplayed) {
-        // Change le background en fonction du temps restant
+        document.body.classList.remove('state-warning', 'state-alert');
         if (!context.timeOnly && context.remainingTime <= context.warningThreshold && context.remainingTime > 0) {
-            document.body.style.backgroundColor = '#FF8C00'; // Orange moins lumineux
-            document.body.style.color = 'black'; // Texte noir pour contraste
+            document.body.classList.add('state-warning');
         } else if (!context.timeOnly && context.remainingTime <= 0) {
-            document.body.style.backgroundColor = 'red';
-            document.body.style.color = 'white'; // Texte blanc sur fond rouge
-        } else {
-            document.body.style.backgroundColor = 'black';
-            document.body.style.color = 'white';
+            document.body.classList.add('state-alert');
         }
     }
 }
 
-// Démarre le compte à rebours
+// Start Countdown
 function startCountdown() {
     countdownElement.textContent = formatCountdownTime(context.remainingTime);
-    document.body.style.backgroundColor = 'black';
 
     clearInterval(countdownInterval);
     countdownInterval = setInterval(updateCountdown, 1000);
 
-    if (i_am_master) {
-        configElement.classList.add('hidden');
-    }
-
-    countdownElement.style.backgroundColor = 'red';
-    document.body.style.color = 'white';
+    closeModals();
     setScreenAwake(true);
     updatePause();
     sendContext();
@@ -337,7 +393,7 @@ function configureStart() {
     config.countdownDuration = (parseInt(durationInput.value, 10) || 0) * 60;
     config.warningThreshold = parseInt(thresholdInput.value, 10) || 0;
 
-    configElement.classList.add('hidden');
+    closeModals();
 
     context.timeOnly = false;
     sendCmd('timeOnly', context.timeOnly);
@@ -359,7 +415,6 @@ function initStart() {
     }
 }
 
-// Gérer le bouton Pause/Reprendre
 function togglePause() {
     context.isPaused = !context.isPaused;
     updatePause();
@@ -377,54 +432,52 @@ function updatePauseLabel() {
 function updatePause() {
     updatePauseLabel();
     if (context.isPaused) {
-        pauseButton.style.backgroundColor = 'red';
-        countdownElement.style.backgroundColor = 'red';
+        pauseButton.classList.add('btn-danger');
         setScreenAwake(false);
     } else {
-        pauseButton.style.backgroundColor = '';
-        countdownElement.style.backgroundColor = '';
+        pauseButton.classList.remove('btn-danger');
         setScreenAwake(true);
     }
 }
 
-// Ajouter du temps au compte à rebours
 function addTime(seconds) {
     if (i_am_master) {
         context.remainingTime += seconds;
         countdownElement.textContent = formatCountdownTime(context.remainingTime);
+        updateProgressBar();
         sendContext();
     } else {
         sendCmd('addTime', seconds);
     }
 }
 
-// Retirer du temps au compte à rebours
 function subtractTime(seconds) {
     if (i_am_master) {
         context.remainingTime -= seconds;
         countdownElement.textContent = formatCountdownTime(context.remainingTime);
+        updateProgressBar();
         sendContext();
     } else {
         sendCmd('subtractTime', seconds);
     }
 }
 
-// Afficher/Masquer la configuration
 function toggleConfig() {
-    configElement.classList.toggle('hidden');
     if (!configElement.classList.contains('hidden')) {
-        messageEditorElement.classList.add('hidden');
+        closeModals();
+    } else {
+        openModal(configElement);
     }
 }
 
 function toggleMessage() {
-    messageEditorElement.classList.toggle('hidden');
     if (!messageEditorElement.classList.contains('hidden')) {
-        configElement.classList.add('hidden');
+        closeModals();
+    } else {
+        openModal(messageEditorElement);
     }
 }
 
-// Gérer le bouton Pause/Reprendre
 function toggleTimeOnly() {
     context.timeOnly = !context.timeOnly;
     initStart();
@@ -442,10 +495,10 @@ function updateTimeOnlyLabel() {
 function updateTimeOnly() {
     updateTimeOnlyLabel();
     if (context.timeOnly) {
-        timeOnlyButton.style.backgroundColor = 'red';
+        timeOnlyButton.classList.add('btn-active');
         setScreenAwake(true);
     } else {
-        timeOnlyButton.style.backgroundColor = '';
+        timeOnlyButton.classList.remove('btn-active');
         setScreenAwake(!context.isPaused);
     }
 }
@@ -455,6 +508,7 @@ function display_message_action() {
     const content = messageContentInput.value;
     const color = messageColorInput.value;
 
+    closeModals();
     display_message(content, duration, color);
     sendCmd('message', {
         timeout: duration,
@@ -463,10 +517,49 @@ function display_message_action() {
     });
 }
 
-// Mise à jour de l'heure actuelle toutes les secondes
-setInterval(updateCurrentTime, 1000);
+// Keyboard Shortcuts Listener
+window.addEventListener('keydown', (e) => {
+    // Ignore shortcuts if active element is an input or select
+    const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+    if (activeTag === 'input' || activeTag === 'select' || activeTag === 'textarea') {
+        if (e.key === 'Escape') {
+            closeModals();
+        }
+        return;
+    }
 
-// Attacher les événements
+    switch (e.key) {
+        case ' ':
+            e.preventDefault();
+            togglePause();
+            break;
+        case 'c':
+        case 'C':
+            e.preventDefault();
+            toggleConfig();
+            break;
+        case 'm':
+        case 'M':
+            e.preventDefault();
+            toggleMessage();
+            break;
+        case 't':
+        case 'T':
+            e.preventDefault();
+            toggleTimeOnly();
+            break;
+        case 'Escape':
+            closeModals();
+            break;
+    }
+});
+
+// Timers initialization
+setInterval(updateCurrentTime, 1000);
+updateCurrentTime();
+updateProgressBar();
+
+// Event Attachments
 startButton.addEventListener('click', configureStart);
 pauseButton.addEventListener('click', togglePause);
 add1minButton.addEventListener('click', () => addTime(60));

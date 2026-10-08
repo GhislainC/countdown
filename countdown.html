@@ -8,49 +8,64 @@
     <link href="style.css" rel="stylesheet">
 </head>
 <body>
+    <!-- Barre de progression supérieure -->
+    <div id="progress-container">
+        <div id="progress-bar"></div>
+    </div>
+
+    <!-- Fond assombri pour modals -->
+    <div id="modal-overlay" class="modal-overlay hidden"></div>
+
     <!-- Panneau de configuration du compte à rebours -->
-    <section id="config" class="panel hidden" aria-label="Configuration du compte à rebours">
-        <div class="config-item">
-            <label for="duration">Durée (en minutes) :</label>
-            <input type="number" id="duration" min="1" value="45">
+    <section id="config" class="panel modal hidden" aria-label="Configuration du compte à rebours">
+        <div class="modal-header">
+            <h2>Configuration</h2>
+            <button type="button" class="close-btn" id="closeConfig" aria-label="Fermer">&times;</button>
         </div>
-        <div class="config-item">
-            <label for="threshold">Seuil d'avertissement (en secondes) :</label>
-            <input type="number" id="threshold" min="1" value="120">
+        <div class="modal-body">
+            <div class="config-item">
+                <label for="duration">Durée (en minutes) :</label>
+                <input type="number" id="duration" min="1" value="45">
+            </div>
+            <div class="config-item">
+                <label for="threshold">Seuil d'avertissement (en secondes) :</label>
+                <input type="number" id="threshold" min="1" value="120">
+            </div>
+            <div class="modal-footer">
+                <button id="startButton" class="btn btn-primary" type="button">Appliquer & Charger</button>
+            </div>
         </div>
-        <button id="startButton" type="button">Charger</button>
     </section>
 
     <!-- Panneau d'édition de message broadcast -->
-    <section id="message-editor" class="panel hidden" aria-label="Éditeur de message">
-        <div class="config-item">
-            <label for="message-duration">Durée (en s) :</label>
-            <input type="number" id="message-duration" min="1" value="10">
+    <section id="message-editor" class="panel modal hidden" aria-label="Éditeur de message">
+        <div class="modal-header">
+            <h2>Diffuser un Message</h2>
+            <button type="button" class="close-btn" id="closeMessage" aria-label="Fermer">&times;</button>
         </div>
-        <div class="config-item">
-            <label for="message-content">Message :</label>
-            <input id="message-content" type="text">
+        <div class="modal-body">
+            <div class="config-item">
+                <label for="message-duration">Durée (en s) :</label>
+                <input type="number" id="message-duration" min="1" value="10">
+            </div>
+            <div class="config-item">
+                <label for="message-content">Message :</label>
+                <input id="message-content" type="text" placeholder="Entrez le message...">
+            </div>
+            <div class="config-item">
+                <label for="message-color">Couleur de fond :</label>
+                <select id="message-color">
+                    <option value="amber">Ambre (Avertissement)</option>
+                    <option value="red">Rouge (Alerte)</option>
+                    <option value="green">Vert (Succès)</option>
+                    <option value="dark">Sombre (Par défaut)</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button id="send_message" class="btn btn-primary" type="button">Envoyer le message</button>
+            </div>
         </div>
-        <div class="config-item">
-            <label for="message-color">Couleur :</label>
-            <input id="message-color" type="text" value="amber">
-        </div>
-        <button id="send_message" type="button">Envoyer</button>
     </section>
-
-    <!-- Contrôles principaux -->
-    <nav id="main_controls" class="buttons" aria-label="Contrôles du compte à rebours">
-        <button id="sub10min" type="button">-10 min</button>
-        <button id="sub5min" type="button">-5 min</button>
-        <button id="sub1min" type="button">-1 min</button>
-        <button id="pauseButton" type="button">Pause</button>
-        <button id="add1min" type="button">+1 min</button>
-        <button id="add5min" type="button">+5 min</button>
-        <button id="add10min" type="button">+10 min</button>
-        <button id="timeOnly" type="button">Heure</button>
-        <button id="toggleConfig" type="button">Config</button>
-        <button id="toggleMessage" type="button">Message</button>
-    </nav>
 
     <!-- zone d'affichage principal -->
     <main class="display-container">
@@ -58,6 +73,28 @@
         <div id="message" class="hidden" aria-live="assertive"></div>
         <div id="current-time">-- -------- -- --:--</div>
     </main>
+
+    <!-- Contrôles principaux -->
+    <nav id="main_controls" class="buttons-bar" aria-label="Contrôles du compte à rebours">
+        <div class="button-group sub-group">
+            <button id="sub10min" class="btn btn-time" type="button">-10 min</button>
+            <button id="sub5min" class="btn btn-time" type="button">-5 min</button>
+            <button id="sub1min" class="btn btn-time" type="button">-1 min</button>
+        </div>
+        <div class="button-group primary-group">
+            <button id="pauseButton" class="btn btn-action btn-main" type="button">Pause</button>
+            <button id="timeOnly" class="btn btn-action" type="button">Heure</button>
+        </div>
+        <div class="button-group add-group">
+            <button id="add1min" class="btn btn-time" type="button">+1 min</button>
+            <button id="add5min" class="btn btn-time" type="button">+5 min</button>
+            <button id="add10min" class="btn btn-time" type="button">+10 min</button>
+        </div>
+        <div class="button-group tools-group">
+            <button id="toggleConfig" class="btn btn-tool" type="button" title="Raccourci: C">Config</button>
+            <button id="toggleMessage" class="btn btn-tool" type="button" title="Raccourci: M">Message</button>
+        </div>
+    </nav>
 
     <script src="app.js"></script>
 </body>
